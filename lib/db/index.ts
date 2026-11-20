@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { and, eq, asc, desc } from "drizzle-orm";
+import { and, eq, asc, desc, notInArray } from "drizzle-orm";
 import type { UIMessage } from "ai";
 import { chats, messages } from "./schema";
 
@@ -33,4 +33,8 @@ export async function saveMessages(userId: string, chatId: string, items: UIMess
       target: messages.id, set: { content },
     });
   }
+  await db().delete(messages).where(and(
+    eq(messages.chatId, chatId),
+    items.length ? notInArray(messages.id, items.map((item) => `${chatId}:${item.id}`)) : undefined,
+  ));
 }

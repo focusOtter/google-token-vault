@@ -3,7 +3,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 import { createChat, listChats, loadMessages, requireChat, saveMessages } from "./index";
 
-const mocks = vi.hoisted(() => ({ select: vi.fn(), insert: vi.fn() }));
+const mocks = vi.hoisted(() => ({ select: vi.fn(), insert: vi.fn(), delete: vi.fn() }));
 vi.mock("@neondatabase/serverless", () => ({ neon: vi.fn() }));
 vi.mock("drizzle-orm/neon-http", () => ({ drizzle: () => mocks }));
 const dialect = new PgDialect();
@@ -22,7 +22,10 @@ function assertScoped(where: ReturnType<typeof vi.fn>) {
   expect(query.sql).toContain('"chats"."user_id" =');
   expect(query.params).toContain(owner);
 }
-beforeEach(() => { vi.resetAllMocks(); process.env.DATABASE_URL = "postgresql://example"; });
+beforeEach(() => {
+  vi.resetAllMocks(); process.env.DATABASE_URL = "postgresql://example";
+  mocks.delete.mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) });
+});
 describe("user-scoped history", () => {
   it("lists only the caller's chats, including an empty list", async () => {
     const where = selection([]);
@@ -48,6 +51,7 @@ describe("user-scoped history", () => {
     expect(mocks.select).toHaveBeenCalledTimes(1);
     selection([]); await expect(saveMessages(owner, chatId, [])).rejects.toThrow("Chat not found");
     expect(mocks.insert).not.toHaveBeenCalled();
+    expect(mocks.delete).not.toHaveBeenCalled();
   });
   it("saves messages after ownership verification", async () => {
     const where = selection([{ id: chatId }]);
@@ -57,6 +61,31 @@ describe("user-scoped history", () => {
     await saveMessages(owner, chatId, [{ id: "m", role: "user", parts: [] }]);
     assertScoped(where);
     expect(values).toHaveBeenCalledWith(expect.objectContaining({ id: chatId + ":m", chatId }));
+    const deletion = dialect.sqlToQuery(mocks.delete.mock.results[0].value.where.mock.calls[0][0]);
+    expect(deletion.sql).toContain('"messages"."chat_id" =');
+    expect(deletion.sql).toContain('"messages"."id" not in');
+    expect(deletion.params).toEqual([chatId, `${chatId}:m`]);
+    expect(mocks.delete.mock.invocationCallOrder[0]).toBeGreaterThan(update.mock.invocationCallOrder[0]);
+  });
+  it("removes every message in an empty replacement, but only from the owned chat", async () => {
+    const where = selection([{ id: chatId }]);
+    await saveMessages(owner, chatId, []);
+    assertScoped(where);
+    const deletion = dialect.sqlToQuery(mocks.delete.mock.results[0].value.where.mock.calls[0][0]);
+    expect(deletion.sql).toBe('"messages"."chat_id" = $1');
+    expect(deletion.params).toEqual([chatId]);
+    expect(mocks.insert).not.toHaveBeenCalled();
+  });
+  it("does not prune history if an upsert fails", async () => {
+    selection([{ id: chatId }]);
+    mocks.insert.mockReturnValue({ values: () => ({ onConflictDoUpdate: vi.fn().mockRejectedValue(new Error("write failed")) }) });
+    await expect(saveMessages(owner, chatId, [{ id: "m", role: "user", parts: [] }])).rejects.toThrow("write failed");
+    expect(mocks.delete).not.toHaveBeenCalled();
+  });
+  it("propagates replacement deletion errors", async () => {
+    selection([{ id: chatId }]);
+    mocks.delete.mockReturnValue({ where: vi.fn().mockRejectedValue(new Error("delete failed")) });
+    await expect(saveMessages(owner, chatId, [])).rejects.toThrow("delete failed");
   });
   it("assigns ownership on create and rejects conflicting foreign IDs", async () => {
     const values = vi.fn(() => ({ onConflictDoNothing: vi.fn().mockResolvedValue(undefined) }));
