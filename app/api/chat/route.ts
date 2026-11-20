@@ -36,7 +36,7 @@ export async function POST(request: Request) {
           experimental_transform: interruptions.transform,
         });
         writer.merge(result.toUIMessageStream({ onError: serializeError }));
-      }, { messages, tools }),
+      }, { messages, tools, connection: process.env.AUTH0_GOOGLE_CONNECTION || "google-oauth2" }),
       onFinish: async ({ messages: finished }) => {
         await saveMessages(session.user.sub, id, finished);
       },
