@@ -50,8 +50,34 @@ describe("consent resumption streaming", () => {
     const execute = vi.fn();
     await expect(withResumedToolResults(execute, {
       messages: [pending()], tools: { calendar: tool({ inputSchema: z.object({}), execute: async () => { throw new Error("Google unavailable"); } }) },
-    })({ writer })).rejects.toThrow("Google unavailable");
+    })({ writer })).rejects.toMatchObject({ cause: { message: "Google unavailable" }, toolCallId: "call-1", toolName: "calendar", toolArgs: {} });
     expect(writer.write).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("resumes the first parallel failure even when another failed tool and text follow it", async () => {
+    const message = pending();
+    message.parts.push({ type: "tool-calendar", toolCallId: "call-2", input: {}, state: "output-error", errorText: "Needs consent" }, { type: "text", text: "" });
+    const executeTool = vi.fn().mockResolvedValue({ events: [] });
+    const writer = { write: vi.fn(), merge: vi.fn() };
+    await withResumedToolResults(vi.fn(), {
+      messages: [message], tools: { calendar: tool({ inputSchema: z.object({}), execute: executeTool }) },
+    })({ writer });
+    expect(executeTool).toHaveBeenCalledOnce();
+    expect(executeTool.mock.calls[0][1].toolCallId).toBe("call-1");
+    expect(writer.write).toHaveBeenCalledWith(expect.objectContaining({ toolCallId: "call-1", output: expect.objectContaining({ result: { events: [] } }) }));
+    expect(message.parts[1]).toMatchObject({ state: "output-error" });
+  });
+
+  it("executes each marked call once, leaving already successful parallel calls alone", async () => {
+    const message = pending();
+    message.parts.push({ ...pending().parts[0], toolCallId: "call-2" } as typeof message.parts[number], { type: "tool-calendar", toolCallId: "done", input: {}, state: "output-available", output: { events: [] } });
+    const executeTool = vi.fn().mockResolvedValue({ events: [] });
+    const writer = { write: vi.fn(), merge: vi.fn() };
+    await withResumedToolResults(vi.fn(), {
+      messages: [message], tools: { calendar: tool({ inputSchema: z.object({}), execute: executeTool }) },
+    })({ writer });
+    expect(executeTool.mock.calls.map((call) => call[1].toolCallId)).toEqual(["call-1", "call-2"]);
+    expect(writer.write).toHaveBeenCalledTimes(2);
   });
 });
