@@ -20,11 +20,24 @@ describe("listCalendarEvents", () => {
     expect(url.searchParams.get("timeMax")).toBe("2026-01-08T00:00:00.000Z");
     expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer vault-token");
     expect(getAccessTokenFromTokenVault).toHaveBeenCalledOnce();
-    expect(result).toMatchObject({ events: [{ id: "event", summary: "(Untitled)" }], hasMore: true });
+    expect(result).toMatchObject({ count: 1, events: [{ id: "event", summary: "(Untitled)" }], hasMore: true });
   });
   it("uses an explicit range and handles an empty calendar", async () => {
     fetchMock.mockResolvedValue(Response.json({}));
-    expect(await listCalendarEvents({ timeMin: "2026-02-01T00:00:00Z", timeMax: "2026-02-02T00:00:00Z" })).toEqual({ events: [], hasMore: false });
+    expect(await listCalendarEvents({ timeMin: "2026-02-01T00:00:00Z", timeMax: "2026-02-02T00:00:00Z" })).toEqual({ count: 0, events: [], hasMore: false });
+  });
+  it("returns an authoritative count for the QA UTC range, including overlapping and all-day events once each", async () => {
+    const items = Array.from({ length: 11 }, (_, i) => ({ id: `event-${i}`, start: i === 0 ? { date: "2026-11-20" } : { dateTime: "2026-11-21T10:00:00Z" }, end: { dateTime: "2026-11-22T00:00:00Z" } }));
+    fetchMock.mockResolvedValue(Response.json({ items }));
+    const result = await listCalendarEvents({ timeMin: "2026-11-20T00:00:00Z", timeMax: "2026-11-26T00:00:00Z" });
+    expect(result.count).toBe(11);
+    expect(result.events).toHaveLength(result.count);
+    expect(result.hasMore).toBe(false);
+    const url = new URL(fetchMock.mock.calls[0][0]);
+    expect(url.pathname).toBe("/calendar/v3/calendars/primary/events");
+    expect(url.searchParams.get("timeMin")).toBe("2026-11-20T00:00:00.000Z");
+    expect(url.searchParams.get("timeMax")).toBe("2026-11-26T00:00:00.000Z");
+    expect(url.searchParams.get("singleEvents")).toBe("true");
   });
   it("rejects invalid ranges without calling Google", async () => {
     await expect(listCalendarEvents({ timeMin: "2026-02-02T00:00:00Z", timeMax: "2026-02-01T00:00:00Z" })).rejects.toThrow("End time");

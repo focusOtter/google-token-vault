@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { describe, expect, it, vi } from "vitest";
-import { createUIMessageStream, createUIMessageStreamResponse, simulateReadableStream, stepCountIs, streamText, tool, type UIMessage } from "ai";
+import { convertToModelMessages, createUIMessageStream, createUIMessageStreamResponse, simulateReadableStream, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { MockLanguageModelV3 } from "ai/test";
 import { errorSerializer } from "@auth0/ai-vercel/interrupts";
 import { TokenVaultInterrupt } from "@auth0/ai/interrupts";
@@ -17,7 +17,7 @@ describe("parallel Google consent", () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     Element.prototype.scrollIntoView = vi.fn();
     let connected = false;
-    const calendar = vi.fn(async () => ({ events: [{ summary: "Team standup" }] }));
+    const calendar = vi.fn(async () => ({ count: 11, events: Array.from({ length: 11 }, (_, i) => ({ id: `event-${i}`, summary: "Team standup" })), hasMore: false }));
     const draft = vi.fn(async () => ({ draftId: "draft-only" }));
     const scopes = ["calendar", "gmail"];
     const withConsent = (execute: () => Promise<unknown>) => async () => {
@@ -44,6 +44,7 @@ describe("parallel Google consent", () => {
       ], initialDelayInMs: null, chunkDelayInMs: null,
     }) }) });
     const finished = vi.fn();
+    const modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>[] = [];
     const serialize = errorSerializer(() => "Service unavailable");
     const fetch = vi.fn(async (_url: unknown, options?: RequestInit) => {
       const { messages } = JSON.parse(String(options?.body)) as { messages: UIMessage[] };
@@ -51,8 +52,10 @@ describe("parallel Google consent", () => {
         originalMessages: messages,
         execute: withResumedToolResults(async ({ writer }) => {
           const interruptions = createToolInterruptionHandler<typeof tools>();
+          const converted = await convertToModelMessages(messages);
+          modelMessages.push(converted);
           writer.merge(streamText({
-            model, messages: [{ role: "user", content: "Read my calendar and draft an email" }], tools,
+            model, messages: converted, tools,
             experimental_transform: interruptions.transform,
             stopWhen: [stepCountIs(2), interruptions.stopWhen], onError: () => {},
           }).toUIMessageStream({ onError: serialize }));
@@ -91,6 +94,13 @@ describe("parallel Google consent", () => {
       expect(JSON.stringify(finished.mock.calls.at(-1)?.[0].messages)).toContain("draft-only");
       expect(JSON.stringify(finished.mock.calls.at(-1)?.[0].messages)).toContain("Team standup");
       expect(JSON.stringify(finished.mock.calls.at(-1)?.[0].messages)).not.toContain("continueInterruption");
+      const results = modelMessages.at(-1)!.flatMap(m => m.role === "tool" ? m.content : []);
+      expect(results).toHaveLength(2);
+      expect(results.filter(p => p.type === "tool-result" && p.toolCallId === "calendar-1")).toHaveLength(1);
+      expect(results.filter(p => p.type === "tool-result" && p.toolCallId === "gmail-1")).toHaveLength(1);
+      expect(results[0]).toMatchObject({ output: { type: "json", value: { result: { count: 11, events: expect.any(Array), hasMore: false } } } });
+      expect(JSON.stringify(results)).not.toContain("AUTH0_AI_INTERRUPTION:");
+      expect(JSON.stringify(results)).not.toContain("continueInterruption");
     } finally {
       await act(async () => root.unmount());
       container.remove();
