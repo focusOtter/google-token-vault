@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Chat } from "./chat";
+import { TokenVaultInterrupt } from "@auth0/ai/interrupts";
 
 const mocks = vi.hoisted(() => ({ chat: vi.fn() }));
 vi.mock("@auth0/ai-vercel/react", () => ({ useInterruptions: () => mocks.chat() }));
@@ -20,6 +21,30 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  vi.restoreAllMocks();
+});
+
+describe("Google consent scopes", () => {
+  it.each([
+    { requiredScopes: ["https://www.googleapis.com/auth/calendar.events.readonly", "https://www.googleapis.com/auth/gmail.compose", "openid"] },
+    { requiredScopes: [] },
+  ])("includes identity scopes alongside required scopes $requiredScopes without duplicates", async ({ requiredScopes }) => {
+    const toolInterrupt = Object.assign(new TokenVaultInterrupt("Connect Google", {
+      connection: "google-token-vault", scopes: requiredScopes, requiredScopes,
+      authorizationParams: { access_type: "offline", prompt: "consent" },
+    }), { resume: vi.fn() });
+    mocks.chat.mockReturnValue({ messages: [], status: "ready", toolInterrupt });
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    await act(async () => root.render(<Chat id="chat-1" name="Alice" initialMessages={[]} history={[]}/>));
+    await act(async () => container.querySelector<HTMLButtonElement>(".consent button")!.click());
+    const url = new URL(String(open.mock.calls[0][0]));
+    expect(url.searchParams.getAll("scopes")).toEqual([...new Set(["openid", "profile", "email", ...requiredScopes])]);
+    expect(url.searchParams.get("connection")).toBe("google-token-vault");
+    expect(url.searchParams.get("access_type")).toBe("offline");
+    expect(url.searchParams.get("prompt")).toBe("consent");
+    expect(url.searchParams.get("returnTo")).toBe("/close");
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Please allow popups and try again.");
+  });
 });
 
 describe("mobile workspace menu", () => {
