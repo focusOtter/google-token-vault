@@ -37,6 +37,7 @@ export async function listCalendarEvents(input: z.infer<typeof calendarInput>) {
   });
   const data = await google(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${query}`);
   return {
+    count: (data.items ?? []).length,
     events: (data.items ?? []).map((event: { id: string; summary?: string; start: unknown; end: unknown; htmlLink?: string }) => ({
       id: event.id, summary: event.summary ?? "(Untitled)", start: event.start, end: event.end, url: event.htmlLink,
     })),

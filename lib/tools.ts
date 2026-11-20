@@ -21,7 +21,7 @@ export function createTools() {
 });
   return {
   listCalendarEvents: withGoogle(tool({
-    description: "Read primary Google Calendar events for a time range, defaulting to the next seven days. Returns at most 100 events; hasMore indicates truncation.",
+    description: "Read primary Google Calendar events for a time range, defaulting to the next seven days. Returns events and their numeric count. Use count, never recount. Returns at most 100 events; hasMore indicates truncation, so count is not a total when hasMore is true.",
     inputSchema: calendarInput, execute: listCalendarEvents,
   })),
   createGmailDraft: withGoogle(tool({

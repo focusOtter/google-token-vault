@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { createUIMessageStream, readUIMessageStream, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import { withResumedToolResults } from "./interruptions";
+import { errorSerializer } from "@auth0/ai-vercel/interrupts";
+import { TokenVaultInterrupt } from "@auth0/ai/interrupts";
 
 function pending(): UIMessage {
   return { id: "assistant", role: "assistant", parts: [{
@@ -79,5 +81,24 @@ describe("consent resumption streaming", () => {
     })({ writer });
     expect(executeTool.mock.calls.map((call) => call[1].toolCallId)).toEqual(["call-1", "call-2"]);
     expect(writer.write).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["google-token-vault", "another-connection", "ordinary", "malformed"])("only groups serialized interruptions on the consented connection: %s", async connection => {
+    const message = pending();
+    const serialize = errorSerializer(() => "Service unavailable");
+    const errorText = connection === "ordinary" ? "Needs consent" : connection === "malformed" ? "AUTH0_AI_INTERRUPTION:{" : serialize({
+      cause: new TokenVaultInterrupt("Connect", { connection, scopes: [], requiredScopes: [] }),
+      toolCallId: "call-2", toolName: "calendar", toolArgs: {},
+    });
+    message.parts.push({ type: "tool-calendar", toolCallId: "call-2", input: {}, state: "output-error", errorText }, {
+      type: "tool-calendar", toolCallId: "done", input: {}, state: "output-available", output: { events: [] },
+    });
+    const executeTool = vi.fn().mockResolvedValue({ events: [] });
+    const writer = { write: vi.fn(), merge: vi.fn(), onError: undefined };
+    await withResumedToolResults(vi.fn(), {
+      messages: [message], tools: { calendar: tool({ inputSchema: z.object({}), execute: executeTool }) }, connection: "google-token-vault",
+    })({ writer });
+    expect(executeTool.mock.calls.map(call => call[1].toolCallId)).toEqual(connection === "google-token-vault" ? ["call-1", "call-2"] : ["call-1"]);
+    expect(message.parts[2]).toMatchObject({ toolCallId: "done", output: { events: [] } });
   });
 });
