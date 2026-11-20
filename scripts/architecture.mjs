@@ -13,10 +13,10 @@ let sequence = 0;
 function base(type, x, y, width, height) {
   return { id: String(++sequence), type, x, y, width, height, angle: 0, strokeColor: "#355445", backgroundColor: "#eef2e7", fillStyle: "solid", strokeWidth: 1.5, strokeStyle: "solid", roughness: 0.6, opacity: 100, groupIds: [], frameId: null, roundness: { type: 3 }, seed: sequence, version: 1, versionNonce: sequence, isDeleted: false, boundElements: null, updated: 1, link: null, locked: false };
 }
-const boxes = [[70,20,"Browser","Chat + Google consent"],[70,150,"Next.js server","Auth0 session + tools"],[70,300,"AI Gateway","Model + streaming"],[70,430,"Auth0 Token Vault","Scoped Google tokens"],[70,560,"Google APIs","Calendar read","Gmail drafts only"],[70,690,"Neon Postgres","Private chat history"]];
-for (const [x,y] of boxes) elements.push(base("rectangle", x,y,300,100));
-for (const [type,x,y,width,height] of [["arrow",220,123,0,24],["line",35,200,32,0],["line",35,200,0,540],...[350,480,610,740].map(y => ["arrow",35,y,32,0])]) elements.push({ ...base(type,x,y,width,height), backgroundColor:"transparent", points:[[0,0],[width,height]], lastCommittedPoint:null, startBinding:null, endBinding:null, startArrowhead:null, endArrowhead:type === "arrow" ? "arrow" : null, elbowed:false });
-const padding = 24;
+const boxes = [[176,12,"Browser","Chat + consent"],[176,128,"Next.js server","Auth0 + tools"],[20,260,"AI Gateway","Model stream"],[332,260,"Auth0 Token Vault","Google tokens"],[20,400,"Google APIs","Calendar read","Gmail drafts"],[332,400,"Neon Postgres","Chat history"]];
+for (const [x,y] of boxes) elements.push(base("rectangle", x,y,268,y < 260 ? 84 : 100));
+for (const [type,x,y,width,height,startArrowhead,endArrowhead] of [["arrow",310,99,0,25,null,"arrow"],["line",310,216,0,234,null,null],...[310,450].flatMap(y => [["arrow",292,y,18,0,"arrow",null],["arrow",310,y,18,0,null,"arrow"]])]) elements.push({ ...base(type,x,y,width,height), backgroundColor:"transparent", points:[[0,0],[width,height]], lastCommittedPoint:null, startBinding:null, endBinding:null, startArrowhead, endArrowhead, elbowed:false });
+const padding = 16;
 const svg = await exportToSvg({ elements, appState:{ viewBackgroundColor:"#fafbf7", exportBackground:true }, files:{}, exportPadding:padding });
 svg.setAttribute("role", "img");
 svg.setAttribute("aria-labelledby", "architecture-title architecture-description");
@@ -25,11 +25,11 @@ for (const [tag,id,text] of [["title","architecture-title","Orbit architecture"]
   node.id = id; node.textContent = text; svg.appendChild(node);
 }
 const labels = document.createElementNS("http://www.w3.org/2000/svg","g");
-labels.setAttribute("transform", `translate(${padding - 35} ${padding - 20})`);
+labels.setAttribute("transform", `translate(${padding - 20} ${padding - 12})`);
 svg.appendChild(labels);
-for (const [x,y,title,subtitle,detail] of boxes) for (const [text,dy,fontSize,weight] of [[title,detail ? 32 : 40,24,600],[subtitle,detail ? 60 : 72,20,400],...(detail ? [[detail,84,20,400]] : [])]) {
+for (const [x,y,title,subtitle,detail] of boxes) for (const [text,dy,fontSize,weight] of [[title,detail || y < 260 ? 32 : 40,28,600],[subtitle,detail || y < 260 ? 64 : 76,26,400],...(detail ? [[detail,92,26,400]] : [])]) {
   const node = document.createElementNS("http://www.w3.org/2000/svg","text");
-  for (const [key,value] of Object.entries({x:x+150,y:y+dy,"text-anchor":"middle","font-family":"Arial, sans-serif","font-size":fontSize,"font-weight":weight,fill:"#253e32"})) node.setAttribute(key,String(value));
+  for (const [key,value] of Object.entries({x:x+134,y:y+dy,"text-anchor":"middle","font-family":"Arial, sans-serif","font-size":fontSize,"font-weight":weight,fill:"#253e32"})) node.setAttribute(key,String(value));
   node.textContent=text; labels.appendChild(node);
 }
 await writeFile(new URL("../docs/architecture.svg",import.meta.url),svg.outerHTML);
