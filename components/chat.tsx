@@ -25,7 +25,9 @@ function ConnectGoogle({ interrupt }: { interrupt: Auth0InterruptionUI }) {
     url.searchParams.set("connection", interrupt.connection);
     url.searchParams.set("returnTo", "/close");
     for (const scope of new Set(["openid", "profile", "email", ...interrupt.requiredScopes])) url.searchParams.append("scopes", scope);
-    for (const [key, value] of Object.entries(interrupt.authorizationParams ?? {})) url.searchParams.set(key, String(value));
+    for (const [key, value] of Object.entries(interrupt.authorizationParams ?? {})) {
+      if (key !== "access_type") url.searchParams.set(key, String(value));
+    }
     const opened = window.open(url, "_blank", "width=650,height=750");
     if (!opened) setError("Please allow popups and try again.");
     else { setError(""); setPopup(opened); }

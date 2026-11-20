@@ -25,13 +25,14 @@ afterEach(async () => {
 });
 
 describe("Google consent scopes", () => {
-  it.each([
-    { requiredScopes: ["https://www.googleapis.com/auth/calendar.events.readonly", "https://www.googleapis.com/auth/gmail.compose", "openid"] },
-    { requiredScopes: [] },
-  ])("includes identity scopes alongside required scopes $requiredScopes without duplicates", async ({ requiredScopes }) => {
+  it.each<{ requiredScopes: string[]; authorizationParams?: Record<string, string> }>([
+    { requiredScopes: ["https://www.googleapis.com/auth/calendar.events.readonly", "https://www.googleapis.com/auth/gmail.compose", "openid"], authorizationParams: { access_type: "offline", prompt: "consent" } },
+    { requiredScopes: [], authorizationParams: {} },
+    { requiredScopes: [], authorizationParams: undefined },
+  ])("includes identity scopes without forwarding provider-only access_type: %j", async ({ requiredScopes, authorizationParams }) => {
     const toolInterrupt = Object.assign(new TokenVaultInterrupt("Connect Google", {
       connection: "google-token-vault", scopes: requiredScopes, requiredScopes,
-      authorizationParams: { access_type: "offline", prompt: "consent" },
+      authorizationParams,
     }), { resume: vi.fn() });
     mocks.chat.mockReturnValue({ messages: [], status: "ready", toolInterrupt });
     const open = vi.spyOn(window, "open").mockReturnValue(null);
@@ -40,8 +41,8 @@ describe("Google consent scopes", () => {
     const url = new URL(String(open.mock.calls[0][0]));
     expect(url.searchParams.getAll("scopes")).toEqual([...new Set(["openid", "profile", "email", ...requiredScopes])]);
     expect(url.searchParams.get("connection")).toBe("google-token-vault");
-    expect(url.searchParams.get("access_type")).toBe("offline");
-    expect(url.searchParams.get("prompt")).toBe("consent");
+    expect(url.searchParams.has("access_type")).toBe(false);
+    expect(url.searchParams.get("prompt")).toBe(authorizationParams?.prompt ?? null);
     expect(url.searchParams.get("returnTo")).toBe("/close");
     expect(container.querySelector('[role="alert"]')?.textContent).toBe("Please allow popups and try again.");
   });

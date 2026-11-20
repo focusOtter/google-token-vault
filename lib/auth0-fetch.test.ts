@@ -15,12 +15,23 @@ describe("connected-account error diagnostics", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("private");
   });
 
-  it.each(["{}", "not json"])('handles empty or malformed error bodies: %s', async body => {
+  it.each(["{}", "null", "not json"])('handles empty or malformed error bodies: %s', async body => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body, { status: 400 })));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const result = await auth0Fetch(new Request("https://tenant.auth0.com/me/v1/connected-accounts/connect"));
     expect(await result.text()).toBe(body);
     expect(warn).toHaveBeenCalledOnce();
+  });
+
+  it("ignores null and primitive validation entries and returns the original response", async () => {
+    const body = { validation_errors: [null, "invalid", 5, { field: "authorization_params", detail: "Invalid parameter" }] };
+    const response = Response.json(body, { status: 400 });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(response));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = await auth0Fetch("https://tenant.auth0.com/me/v1/connected-accounts/connect");
+    expect(result).toBe(response);
+    expect(await result.json()).toEqual(body);
+    expect(warn.mock.calls[0][1].validationErrors).toEqual([{ field: "authorization_params", detail: "Invalid parameter" }]);
   });
 
   it("redacts opaque values in the allowlisted error description", async () => {
