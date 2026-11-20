@@ -50,7 +50,7 @@ Enable **Token Vault / Connected Accounts** in your tenant. Authorize the applic
 
 1. Create a Google Cloud OAuth web client. Enable **Google Calendar API** and **Gmail API**. Configure Google's consent screen; for a testing app add your account as a test user. Production use of Gmail's restricted scopes requires Google's verification/security requirements.
 2. Use your **own Google client ID and secret**, not Auth0 development keys. Google's authorized redirect URI must match the callback displayed by the Auth0 connection, usually `https://YOUR_AUTH0_DOMAIN/login/callback`.
-3. Enable the Google social connection named **`google-oauth2`** for this Auth0 application.
+3. Enable a Google social connection for this Auth0 application. The default name is **`google-oauth2`**; set `AUTH0_GOOGLE_CONNECTION` to use a dedicated connection (for example, `google-token-vault`) without changing a shared demo connection.
 4. Enable **Token Vault** on the connection and **Offline Access in Connection Permissions** (required by Connected Accounts). Allow both scopes:
    - `https://www.googleapis.com/auth/calendar.events.readonly`
    - `https://www.googleapis.com/auth/gmail.compose`
@@ -65,6 +65,7 @@ Create a Neon Postgres database and copy its TLS connection string. Create a Ver
 | Environment variable | Purpose |
 | --- | --- |
 | `AUTH0_DOMAIN` | Tenant domain without protocol |
+| `AUTH0_GOOGLE_CONNECTION` | Google connection name; defaults to `google-oauth2` |
 | `AUTH0_CLIENT_ID` | Regular Web Application ID |
 | `AUTH0_CLIENT_SECRET` | Server-side application secret |
 | `AUTH0_SECRET` | Random 32-byte hex session encryption secret |

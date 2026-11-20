@@ -10,7 +10,7 @@ export const googleScopes = [
 export function createTools() {
   const ai = new Auth0AI();
   const withGoogle = ai.withTokenVault({
-  connection: "google-oauth2",
+  connection: process.env.AUTH0_GOOGLE_CONNECTION || "google-oauth2",
   scopes: googleScopes,
   refreshToken: async () => {
     const session = await auth0.getSession();
