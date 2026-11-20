@@ -35,6 +35,7 @@ function ConnectGoogle({ interrupt }: { interrupt: Auth0InterruptionUI }) {
 
 export function Chat({ id, history, initialMessages, name }: { id: string; history: { id: string; title: string }[]; initialMessages: UIMessage[]; name: string }) {
   const [input, setInput] = useState("");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [localHistory, setLocalHistory] = useState(history);
   const bottom = useRef<HTMLDivElement>(null);
   const { messages, sendMessage, toolInterrupt, status, error, regenerate } = useInterruptions(function useChatWithInterruptions(handler) {
@@ -59,9 +60,12 @@ export function Chat({ id, history, initialMessages, name }: { id: string; histo
     <aside className="sidebar">
       <Link className="brand" href="/"><Orbit size={28}/><span>orbit<span className="brand-dot">.</span></span></Link>
       <a className="new-chat" href="/chat"><Plus size={17}/> New conversation</a>
+      <button className="mobile-menu-toggle" aria-expanded={mobileMenuOpen} aria-controls="sidebar-content" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>{mobileMenuOpen ? "Close menu" : "Menu"}</button>
+      <div id="sidebar-content" className={`sidebar-content${mobileMenuOpen ? " is-open" : ""}`}>
       <div className="eyebrow side-label">YOUR SPACE</div>
       <nav aria-label="Past conversations">{localHistory.length ? localHistory.map((chat) => <a className={id === chat.id ? "active chat-link" : "chat-link"} key={chat.id} href={`/chat?id=${chat.id}`}><MessageSquare size={15}/><span>{chat.title}</span></a>) : <p className="muted small">Your conversations will live here.</p>}</nav>
       <div className="sidebar-bottom"><div className="vault-note"><ShieldCheck size={17}/><span>Powered by Auth0<br/><strong>Token Vault</strong></span></div><div className="profile"><span className="avatar">{name[0].toUpperCase()}</span><span className="profile-name">{name}</span><a href="/auth/logout" title="Sign out">↗</a></div></div>
+      </div>
     </aside>
     <main className="chat-main">
       <header className="topbar"><span>Personal workspace <span className="slash">/</span> Assistant</span><span className="private-badge"><span/> Private by design</span></header>
