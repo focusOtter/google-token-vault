@@ -37,8 +37,8 @@ describe("consent resumption streaming", () => {
     expect(JSON.stringify(finished.mock.calls[0][0].messages)).not.toContain("continueInterruption");
   });
 
-  it.each([[], [{ id: "user", role: "user", parts: [{ type: "text", text: "Hello" }] }]])("leaves non-resumption requests alone", async (messages) => {
-    const writer = { write: vi.fn(), merge: vi.fn() };
+  it.each([{ messages: [] }, { messages: [{ id: "user", role: "user", parts: [{ type: "text", text: "Hello" }] }] }])("leaves non-resumption requests alone", async ({ messages }) => {
+    const writer = { write: vi.fn(), merge: vi.fn(), onError: undefined };
     const execute = vi.fn();
     await withResumedToolResults(execute, { messages: messages as UIMessage[], tools: {} })({ writer });
     expect(writer.write).not.toHaveBeenCalled();
@@ -46,10 +46,10 @@ describe("consent resumption streaming", () => {
   });
 
   it("does not publish a successful result or run the model if the resumed tool fails", async () => {
-    const writer = { write: vi.fn(), merge: vi.fn() };
+    const writer = { write: vi.fn(), merge: vi.fn(), onError: undefined };
     const execute = vi.fn();
     await expect(withResumedToolResults(execute, {
-      messages: [pending()], tools: { calendar: tool({ inputSchema: z.object({}), execute: async () => { throw new Error("Google unavailable"); } }) },
+      messages: [pending()], tools: { calendar: tool({ inputSchema: z.object({}), execute: async (): Promise<unknown> => { throw new Error("Google unavailable"); } }) },
     })({ writer })).rejects.toMatchObject({ cause: { message: "Google unavailable" }, toolCallId: "call-1", toolName: "calendar", toolArgs: {} });
     expect(writer.write).not.toHaveBeenCalled();
     expect(execute).not.toHaveBeenCalled();
@@ -59,7 +59,7 @@ describe("consent resumption streaming", () => {
     const message = pending();
     message.parts.push({ type: "tool-calendar", toolCallId: "call-2", input: {}, state: "output-error", errorText: "Needs consent" }, { type: "text", text: "" });
     const executeTool = vi.fn().mockResolvedValue({ events: [] });
-    const writer = { write: vi.fn(), merge: vi.fn() };
+    const writer = { write: vi.fn(), merge: vi.fn(), onError: undefined };
     await withResumedToolResults(vi.fn(), {
       messages: [message], tools: { calendar: tool({ inputSchema: z.object({}), execute: executeTool }) },
     })({ writer });
@@ -73,7 +73,7 @@ describe("consent resumption streaming", () => {
     const message = pending();
     message.parts.push({ ...pending().parts[0], toolCallId: "call-2" } as typeof message.parts[number], { type: "tool-calendar", toolCallId: "done", input: {}, state: "output-available", output: { events: [] } });
     const executeTool = vi.fn().mockResolvedValue({ events: [] });
-    const writer = { write: vi.fn(), merge: vi.fn() };
+    const writer = { write: vi.fn(), merge: vi.fn(), onError: undefined };
     await withResumedToolResults(vi.fn(), {
       messages: [message], tools: { calendar: tool({ inputSchema: z.object({}), execute: executeTool }) },
     })({ writer });
